@@ -251,7 +251,7 @@ acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS)
     ACPI_HANDLE h;
 	ACPI_STATUS status;
 	long fan_index;
-	int fan_new_request;
+	int fan_new_level;
 
     parent = SYSCTL_PARENT(oidp); 
     fan_index = strtol(parent->oid_name, NULL, 0);
@@ -262,20 +262,11 @@ acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS)
 
     if(req->newptr) {	/* Write request */
 		
-		SYSCTL_IN(req, &fan_new_request, sizeof(fan_new_request));
-		
-		if(acpi_fan_softc.version == 1)
-			acpi_fan_on_off(fan_new_request);
-		else
-			acpi_fan_set_level(new_request);
-		return 0;
+		SYSCTL_IN(req, &fan_new_level, sizeof(fan_new_level));
+		acpi_fan_set_level(new_level);
 	}
 
     else /* read request */ {
-		
-		if(acpi_fan_softc.version == 1)
-			SYSCTL_OUT(req, &sc->fan_level, sizeof(sc->fan_level));
-		else
 			SYSCTL_OUT(req, &sc->fan_level, sizeof(sc->fan_level)); // instead probe _FST???
 	}
     return 0;
