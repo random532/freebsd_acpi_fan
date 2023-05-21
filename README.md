@@ -1,5 +1,5 @@
 # freebsd_acpi_fan
-Work in progress - skeleton acpi fan driver ("PNP0C0B")
+Work in progress - skeleton FreeBSD acpi fan driver ("PNP0C0B")
 
 This is a work in progress! What it currently does:
 
