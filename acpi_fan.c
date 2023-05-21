@@ -1,5 +1,7 @@
-/* FreeBSD fan driver */
-/* current ACPI specification 6.5 */
+/* ******************************* */
+/* FreeBSD acpi generic fan driver */
+/* current ACPI specification: 6.5 */
+/* ******************************* */
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
@@ -139,9 +141,9 @@ acpi_fan_attach(device_t dev)
 
 	/* fans are either acpi 1.0 or 4.0 compatible, so check now. */
 	if (acpi_fan_get_fif(dev) &&
-	ACPI_SUCCESS(acpi_get_handle(handle, "_FPS", &tmp)) &&
-	ACPI_SUCCESS(acpi_get_handle(handle, "_FSL", &tmp)) &&
-	ACPI_SUCCESS(acpi_get_handle(handle, "_FST", &tmp)))	
+	ACPI_SUCCESS(acpi_GetHandleInScope(handle, "_FPS", &tmp)) &&
+	ACPI_SUCCESS(acpi_GetHandleInScope(handle, "_FSL", &tmp)) &&
+	ACPI_SUCCESS(acpi_GetHandleInScope(handle, "_FST", &tmp)))	
 		acpi_fan_initiate_acpi4(dev);
 	
 	else	/* nothing to do in acpi version 1, really */
@@ -209,7 +211,7 @@ acpi_fan_turn_on_off(SYSCTL_HANDLER_ARGS) {
 				status = acpi_evaluate_object(h, "_PS3", NULL, NULL);
 -				if (ACPI_FAILURE(status)) {
 -					ACPI_VPRINT(dev, acpi_device_get_parent_softc(dev),
-					"turning fan on: failed\n");
+					"turning fan on: failed --%s\n", AcpiFormatException(statuts));
 					return 0;
 				}
 				sc->fan_runs = TRUE;
@@ -221,7 +223,7 @@ acpi_fan_turn_on_off(SYSCTL_HANDLER_ARGS) {
 				status = acpi_evaluate_object(h, "_PS0", NULL, NULL);
 -				if (ACPI_FAILURE(status)) {
 -					ACPI_VPRINT(dev, acpi_device_get_parent_softc(dev),
-					"turning fan off: failed\n");
+					"turning fan off: failed --%s\n", AcpiFormatException(statuts));
 					return 0;
 				}
 				sc->fan_runs = FALSE;
