@@ -89,9 +89,7 @@ struct acpi_fan_softc {
 	int			acpi4;	/* either ACPI 1.0 or 4.0 */
 	
 	int			fan_is_running;
-	int			fan_speed;
-	int 		fan_level;
-	
+
 	struct 		acpi_fan_fif;
 	ACPI_OBJECT *acpi_fan_fps;
 	int			max_fps;
@@ -269,9 +267,7 @@ acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS)
 			if((requested_speed <= 100) && (requested_speed >= 0)) {
 				
 				status = acpi_evaluate_object(h, "_FSL", requested_speed, NULL);
-				if (ACPI_SUCCESS(status))
-					sc->fan_speed=requested_speed;
-				else
+				if (ACPI_FAILURE(status))
 					ACPI_VPRINT(dev, acpi_device_get_parent_softc(dev),
 					"setting fan level: failed --%s\n", AcpiFormatException(statuts));
 			}
@@ -284,9 +280,7 @@ acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS)
 			/* XXX: check if we have valid level? */
 			if(requested_speed) {
 				status = acpi_evaluate_object(h, "_FSL", requested_speed, NULL);
-				if (ACPI_SUCCES(status))
-					sc->fan_level=requested_speed;
-				else
+				if (ACPI_FAILURE(status))
 					ACPI_VPRINT(dev, acpi_device_get_parent_softc(dev),
 					"setting fan level: failed --%s\n", AcpiFormatException(statuts));
 			}
