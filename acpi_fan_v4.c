@@ -80,8 +80,8 @@ static device_method_t acpi_fan_methods[] = {
     DEVMETHOD(device_attach,	acpi_fan_attach),
     DEVMETHOD(device_detach,	acpi_fan_detach),
 	DEVMETHOD(device_suspend,	acpi_fan_suspend),
+	DEVMETHOD(device_resume,	acpi_fan_resume),
 	
-
     DEVMETHOD_END
 };
 
@@ -90,15 +90,9 @@ static device_method_t acpi_fan_methods[] = {
  * ---------------- */
 static int acpi_fan_get_fif(device_t dev);
 static int acpi_fan_get_fst(device_t dev);
-static void acpi_fan_initiate_acpi4(device_t);
-static void acpi_fan_turn_on_off(bool powered);
-static void acpi_fan_set_level(int new_fan_level);
-static void acpi_fan_set_level(int);
-
-static void acpi_fan_turn_on_off(SYSCTL_HANDLER_ARGS);
-static int acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS);
-static int acpi_fan_speed_sysctl(SYSCTL_HANDLER_ARGS);
-
+static int acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS)
+static int acpi_fan_on_sysctl(SYSCTL_HANDLER_ARGS);
+static void acpi_fan_set_on(device_t dev, int new_state);
 
 /* probe the fan */
 static int
@@ -197,6 +191,17 @@ acpi_fan_detach(device_t dev) {
 	return 0;
 }
 
+static int
+acpi_fan_suspend(device_t dev) {
+	acpi_fan_set_on(dev, 0);
+	return 0;
+}
+
+static int
+acpi_fan_resume(device_t dev) {
+	acpi_fan_set_on(dev, 1);
+	return 0;
+}
 
 
 static int
