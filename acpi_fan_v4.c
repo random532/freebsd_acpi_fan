@@ -58,7 +58,6 @@ static MALLOC_DEFINE(M_ACPIFAN, "acpifan",
 /* structures required by acpi version 4.0 fan control: _FPS, _FIF, _FST */
 /* ********************************************************************* */
 
-// #define ACPI_FPS_NAME_LEN	20
 
 struct acpi_fan_fps {
 	int control;
@@ -66,11 +65,9 @@ struct acpi_fan_fps {
 	int speed;
 	int noise_level;
 	int power;
-//	char name[ACPI_FPS_NAME_LEN];
-//	struct device_attribute dev_attr;
 };
 
-struct acpi_fif {
+struct acpi_fan_fif {
 	int rev;	/* revision always zero */
 	int fine_grain_ctrl;	/* fine grain control */
 	int stepsize;	/* step size 1-9 */
@@ -95,10 +92,10 @@ struct acpi_fan_softc {
 	int			fan_speed;
 	int 		fan_level;
 	
-	struct 		acpi_fif;
-	ACPI_OBJECT *acpi_fps;
+	struct 		acpi_fan_fif;
+	ACPI_OBJECT *acpi_fan_fps;
 	int			max_fps;
-	struct 		acpi_fst;
+	struct 		acpi_fan_fst;
 };
 
 /* (dynamic) sysctls */
@@ -188,7 +185,7 @@ acpi_fan_attach(device_t dev)
 			"fan_speed", CTLTYPE_INT | CTLFLAG_RW, 0, 0,
 			acpi_fan_level_sysctl, "I" ,"Fan speed in %");
 
-			SYSCTL_ADD_INT(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO, sc.acpi_fif->stepsize,
+			SYSCTL_ADD_INT(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO, sc.acpi_fan_fif->stepsize,
 			"Step_size", CTLTYPE_INT | CTLFLAG_R, 0, 0, "I" ,"Step size");
 		}
 		else {	/* fan control via levels */
@@ -223,8 +220,8 @@ acpi_fan_attach(device_t dev)
 static int
 acpi_fan_detach(device_t dev) {
 	sysctl_ctx_free(&clist);
-	if(sc->acpi_fps)
-		AcpiOsFree(sc->acpi_fps);
+	if(sc->acpi_fan_fps)
+		AcpiOsFree(sc->acpi_fan_fps);
 	return 0;
 }
 
@@ -298,7 +295,7 @@ acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS)
 
     else /* read request */ {
 		acpi_fan_get_fst(device_t dev);
-		SYSCTL_OUT(req, &sc.acpi_fst->control, sizeof(sc.acpi_fst->control));
+		SYSCTL_OUT(req, &sc.acpi_fan_fst->control, sizeof(sc.acpi_fan_fst->control));
 	}
     return 0;
 }
@@ -360,7 +357,7 @@ static int acpi_fan_rpm_sysctl(SYSCTL_HANDLER_ARGS) {
 
     if(!req->newptr) {	/* read request */
 		if(acpi_fan_get_fst(device_t dev))
-			SYSCTL_OUT(req, &sc.acpi_fst->speed, sizeof(sc.acpi_fst->speed));
+			SYSCTL_OUT(req, &sc.acpi_fan_fst->speed, sizeof(sc.acpi_fan_fst->speed));
 		/* else error */
 	}
     return 0;
@@ -428,7 +425,7 @@ static int acpi_fan_get_fif(device_t dev) {
 	    AcpiFormatException(as));
 		return 0;
 	}
-	memcpy(fif_buffer, &sc->acpi_fif, sizeof(*fif_buffer));
+	memcpy(fif_buffer, &sc->acpi_fan_fif, sizeof(*fif_buffer));
 	return 1;
 }
 
@@ -455,7 +452,7 @@ static int acpi_fan_get_fst(device_t dev) {
 	    AcpiFormatException(as));
 		return 0;
 	}
-	memcpy(fst_buffer, &sc->acpi_fst, sizeof(*fst_buffer));
+	memcpy(fst_buffer, &sc->acpi_fan_fst, sizeof(*fst_buffer));
 	// ACPIOsFree(fst_buffer); ??
 	return 1;
 }
@@ -492,7 +489,7 @@ static int acpi_fan_get_fps(device_t dev) {
 	sc->max_fps = obj->package.count - 1; /* minus revision field */
 	
 //	sc->acpi_fps = malloc(sizeof(obj), M_ACPIFAN, M_WAITOK); ???
-	sc->acpi_fps = obj;
+	sc->acpi_fan_fps = obj;
 	
 	return 1;
 }
