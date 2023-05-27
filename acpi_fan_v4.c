@@ -197,9 +197,10 @@ acpi_fan_attach(device_t dev)
 		}
 	
 	
-		SYSCTL_ADD_PROC(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
-		"rpm", CTLTYPE_INT | CTLFLAG_R, 0, 0,
-		acpi_fan_rpm_sysctl, "I" ,"current revolutions per minute");
+		if(sc->acpi_fan_fst != 0xFFFFFFFF)
+			SYSCTL_ADD_PROC(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
+			"rpm", CTLTYPE_INT | CTLFLAG_R, 0, 0,
+			acpi_fan_rpm_sysctl, "I" ,"current revolutions per minute");
 	}
 
 	else {	/* acpi0 */
@@ -208,7 +209,7 @@ acpi_fan_attach(device_t dev)
 		"Fan_on", CTLTYPE_INT | CTLFLAG_RW, 0, 0,
 		acpi_fan_on_sysctl, "I" ,"Fan ON=1 OFF=0");
 	}
-	
+
 	/* acpi subsystem powers on all new devices, right? No need to check */
 	sc->fan_is_running=1;
 	
@@ -326,7 +327,7 @@ acpi_fan_on_sysctl(SYSCTL_HANDLER_ARGS) {
 
     else /* read request */ {
 			/* get the power state, report it. */
-			&sc->fan_is_running = acpi_get_powerstate(dev); /* XXX: what is this? */
+			sc->fan_is_running = acpi_get_powerstate(dev); /* XXX: what is this? */
 			SYSCTL_OUT(req, &sc->fan_is_running, sizeof(sc->fan_is_running));
 	}
     return 0;
