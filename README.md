@@ -10,7 +10,6 @@ Have a nice day :-)
 
 Steps:
 1. Add the file acpi_fan.c to the directory: /usr/src/sys/dev/acpica/
-2. Add the word "fan" to the file: /usr/src/sys/modules/acpi/acpi/Makefile
-3. Add the line "dev/acpica/acpi_fan.c		optional acpi" to the file: /usr/src/sys/conf/files
-4. Now you can compile your kernel, e.g. with the option MODULES_OVERRIDE=acpi
-5. Edit the acpi_fan.c skeleton file so that it actually does something. 
+2. Add the line "dev/acpica/acpi_fan.c		optional acpi" to the file: /usr/src/sys/conf/files
+3. Now you can compile your kernel, e.g. with the option MODULES_OVERRIDE=acpi
+4. Edit the acpi_fan.c skeleton file so that it actually does something. 
