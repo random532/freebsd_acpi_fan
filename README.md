@@ -2,8 +2,7 @@
 
 Work in progress :- )
 
-Due to my limited understanding of ACPICA, ACPI, and kernel subsystems, there must be bugs. Therefore, this can only be useful for developers, not for end users, so far.
-
+This is only a skeleton driver. Use it for your inspiration.
 
 I have no hardware to test this. :-)
 
