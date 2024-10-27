@@ -62,6 +62,9 @@ ACPI_MODULE_NAME("FAN")
 static MALLOC_DEFINE(M_ACPIFAN, "acpifan",
     "ACPI fan performance states data");
 
+
+ACPI_SERIAL_DECL(fan, "ACPI fan");
+
 /* ********************************************************************* */
 /* structures required by acpi version 4.0 fan control: _FPS, _FIF, _FST */
 /* ********************************************************************* */
@@ -96,7 +99,7 @@ struct acpi_fan_softc {
 	device_t	dev;
 	int			acpi4;	/* either ACPI 1.0 or 4.0 */
 	
-	int			fan_is_running;
+	int			fan_powered;
 
 	struct acpi_fan_fif		fif;
 	struct acpi_fan_fps		fps;
@@ -108,8 +111,6 @@ struct acpi_fan_softc {
 static devclass_t acpi_fan_devclass;
 
 /* (dynamic) sysctls */
-static struct	sysctl_ctx_list clist;
-
 
 
 /* ---------------- *
@@ -119,9 +120,10 @@ static int acpi_fan_get_fif(device_t dev);
 static int acpi_fan_get_fst(device_t dev);
 static int acpi_fan_get_fps(device_t dev);
 static int acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS);
-static int acpi_fan_on_sysctl(SYSCTL_HANDLER_ARGS);
+static int acpi_fan_powered_sysctl(SYSCTL_HANDLER_ARGS);
 static int acpi_fan_rpm_sysctl(SYSCTL_HANDLER_ARGS);
-static void acpi_fan_set_on(device_t dev, int new_state);
+static void acpi_fan_set_power(device_t dev, int new_state);
+static int acpi_fan_get_power_state(device_t dev);
 
 
 /*-------------- * 
@@ -185,12 +187,15 @@ acpi_fan_attach(device_t dev)
     handle = acpi_get_handle(dev);
     sc->dev = dev;
 
+	/* acpi subsystem powers on all new devices, right? No need to check. XXX: btw this is not a check. */
+	sc->fan_powered=1;
+
 	/* create sysctls for 3 scenarios: 
 	fan control via percentage (1)
 	fan control via fan levels (2)
 	fan control via acpi version 1.0 (3) */
-	
-	sysctl_ctx_init(&clist);		/* sysctl context */
+
+	/* sysctl context XXX: Delete? */
 	struct sysctl_oid *fan_oid = device_get_sysctl_tree(dev);
 
 
@@ -201,41 +206,47 @@ acpi_fan_attach(device_t dev)
 		ACPI_SUCCESS(acpi_GetHandleInScope(handle, "_FSL", &tmp))) {
 		
 		sc->acpi4=1;	/* acpi 4.0 compatible */
+		/* XXX: ACPI 4.0 will be implemented later!!!! */
+		}
 		
-		if(sc->fif.fine_grain_ctrl) { /* fan control via percentage */
-			SYSCTL_ADD_PROC(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
-			"fan_speed", CTLTYPE_INT | CTLFLAG_RW, 0, 0,
+		/*
+		// Maybe these syssctls can be handled in a single sysctl-handler using arg2 for a switch statement? 
+		
+		if(sc->fif.fine_grain_ctrl) { // fan control via percentage
+			SYSCTL_ADD_PROC(NULL, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
+			"fan_speed", CTLTYPE_INT | CTLFLAG_RW, sc, 0,
 			acpi_fan_level_sysctl, "I" ,"Fan speed in %");
 
-			SYSCTL_ADD_INT(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO, 
-			"Step_size", CTLFLAG_RD, &sc->fif.stepsize, 0, "Step size");
+			SYSCTL_ADD_INT(NULL, SYSCTL_CHILDREN(fan_oid), OID_AUTO, 
+			"Step_size", CTLFLAG_RD, sc, 0, "Step size");
 		}
-		else {	/* fan control via levels */
-			SYSCTL_ADD_PROC(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
-			"current_fan_level", CTLTYPE_INT | CTLFLAG_RW, 0, 0,
+		else {	// fan control via levels
+			SYSCTL_ADD_PROC(NULL, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
+			"current_fan_level", CTLTYPE_INT | CTLFLAG_RW, sc, 0,
 			acpi_fan_level_sysctl, "I", "Fan level");
 		
-			/* XXX: available fan levels, string? array?*/
-			SYSCTL_ADD_INT(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
-			"max_fan_levels", CTLFLAG_RD, &sc->max_fps, 0,"max fan levels");
+			// XXX: available fan levels, string? array?
+			SYSCTL_ADD_INT(NULL, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
+			"max_fan_levels", CTLFLAG_RD, sc, 0,"max fan levels");
 		}
 	
 	
 		if(acpi_fan_get_fst(dev))
-			SYSCTL_ADD_PROC(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
-			"rpm", CTLTYPE_INT | CTLFLAG_RD, 0, 0,
-			acpi_fan_rpm_sysctl, "I" ,"current revolutions per minute"); /* XXX: what is acpi_fan_rpm_sysctl? Why is this not an int readable? */
+			SYSCTL_ADD_PROC(NULL, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
+			"rpm", CTLTYPE_INT | CTLFLAG_RD, sc, 0,
+			acpi_fan_rpm_sysctl, "I" ,"current revolutions per minute"); // XXX: what is acpi_fan_rpm_sysctl? Why is this not an int readable?
 	}	
+	*/
 
-	else {	/* acpi0 */
+	else {	/* acpi 1.0 */
 		sc->acpi4 = 0;
-		SYSCTL_ADD_PROC(&clist, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
-		"Fan_on", CTLTYPE_INT | CTLFLAG_RW, 0, 0,
-		acpi_fan_on_sysctl, "I" ,"Fan ON=1 OFF=0");
-	}
-
-	/* acpi subsystem powers on all new devices, right? No need to check. XXX: btw this is not a check. */
-	sc->fan_is_running=1;
+		
+		SYSCTL_ADD_PROC(NULL, SYSCTL_CHILDREN(fan_oid), OID_AUTO,
+		"powered", CTLTYPE_INT | CTLFLAG_RW, sc, sc->fan_powered,
+		acpi_fan_powered_sysctl, "I" ,"Fan OFF=0 ON=1 UNKNOWN=2");
+	}	
+	
+	// XXX: Add a debug sysctl for testing!
 	
 	return 0;
 }
@@ -246,26 +257,25 @@ acpi_fan_detach(device_t dev) {
 //	struct acpi_fan_softc *sc;
 //    sc = device_get_softc(dev);
 
-	sysctl_ctx_free(&clist);
-//	if(sc->fps)
+//	if(sc->acpi4)
 //		AcpiOsFree(sc->fps);		/* remove the sysctls, dont change fan settings and leave. */
 	return 0;
 }
 
 static int
 acpi_fan_suspend(device_t dev) {
-	acpi_fan_set_on(dev, 0);				/* fan should be off in suspend mode */
+	//acpi_fan_set_power(dev, 0);				/* fan should be off in suspend mode, right? */
 	return 0;
 }
 
 static int
 acpi_fan_resume(device_t dev) {
-	acpi_fan_set_on(dev, 1);				/* turn fan on on resume. XXX: Do we need to check anything? */
+	//acpi_fan_set_power(dev, 1);				/* turn fan on on resume. XXX: Do we need to check anything? */
 	return 0;
 }
 
 
-/* this function is triggered by using the sysctl from userland */
+/* Userland requestet fan level sysctl */
 static int
 acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS)
 {
@@ -284,10 +294,12 @@ acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS)
     h = acpi_get_handle(dev);		
     sc = device_get_softc(dev);
 
+//	ACPI_SERIAL_BEGIN(fan);
+	
     if(req->newptr) {	/* Write request */
 		
-		if(!sc->fan_is_running)
-			acpi_fan_set_on(dev, 1);	/* XXX: will this work? Do we need to sleep a bit? */
+		if(!sc->fan_powered)
+			acpi_fan_set_power(dev, 1);	/* XXX: will this work? Do we need to sleep a bit? */
 
 		SYSCTL_IN(req, &requested_speed, sizeof(requested_speed));
 			
@@ -323,46 +335,46 @@ acpi_fan_level_sysctl(SYSCTL_HANDLER_ARGS)
 		acpi_fan_get_fst(dev); /* XXX: does it matter, whether it is fan level control or percentage level? */
 		SYSCTL_OUT(req, &sc->fst.control, sizeof(sc->fst.control));
 	}
+	
+//	ACPI_SERIAL_END(fan);
+	
     return 0;
 }
 
-/* This sysctl controls if the fan is running or not. Experimental! */
+/* This sysctl controls if the fan is on or off. */
 static int
-acpi_fan_on_sysctl(SYSCTL_HANDLER_ARGS) {
+acpi_fan_powered_sysctl(SYSCTL_HANDLER_ARGS) {
 	
-
-	struct sysctl_oid *parent;
-    struct acpi_fan_softc *sc;
-    device_t dev;
-//    ACPI_HANDLE h;
-//	ACPI_STATUS status;
-	long fan_index;
-	int fan_new;
+	struct acpi_fan_softc *sc;
+	int error;
 	
+	sc = (struct acpi_fan_softc *) oidp->oid_arg1;
 
-    parent = SYSCTL_PARENT(oidp); 
-    fan_index = strtol(parent->oid_name, NULL, 0);
-    dev = devclass_get_device(acpi_fan_devclass, (int) fan_index);
-
-//    h = acpi_get_handle(dev);		
-    sc = device_get_softc(dev);
+	if(!req->newptr) { /* Read request. */
+		SYSCTL_OUT(req, &sc->fan_powered, sizeof(sc->fan_powered));
+	}
 	
+	else { /* Write request. */
+		error = SYSCTL_IN(req, &sc->fan_powered, sizeof(sc->fan_powered));
+		if (error)
+			return (error);
 
-    if(req->newptr) {	/* Write request */
+		/* Correct bogus writes to either 0 or 1. */
+		if (sc->fan_powered !=0)
+			sc->fan_powered = 1;
 		
-		SYSCTL_IN(req, &fan_new, sizeof(sc->fan_is_running));
-		if((fan_new == 1) || (fan_new == 0))
-			acpi_fan_set_on(dev, fan_new);
-
-		/* else error */
+		/* Attempt to set the power state. */
+		if (acpi_DeviceIsPresent(sc->dev)) {
+			error = acpi_fan_get_power_state(sc->dev);
+			if (error == 2) {
+				/*XXX: My 1.0 compatible mainboard ends up here... */
+				return (0);
+			}
+			if (error != sc->fan_powered)
+				acpi_fan_set_power(sc->dev, sc->fan_powered);
+		}
 	}
-
-    else /* read request */ {
-			/* get the power state, report it. */
-			//sc->fan_is_running = acpi_get_powerstate(dev); /* XXX: what is this? */
-			SYSCTL_OUT(req, &sc->fan_is_running, sizeof(sc->fan_is_running));
-	}
-    return 0;
+	return (0);
 }
 
 
@@ -391,55 +403,68 @@ static int acpi_fan_rpm_sysctl(SYSCTL_HANDLER_ARGS) {
     return 0;
 }
 
+
+static int acpi_fan_get_power_state(device_t dev) {
+
+	ACPI_STATUS status;
+	ACPI_HANDLE h;
+	UINT32 state;
+	
+
+	h = acpi_get_handle(dev);
+
+	/*
+	* If no _STA method or if it failed, then assume that
+	* it is ... Unknown (state=2)? Running (state=1)? 
+	*/
+//	ACPI_SERIAL_BEGIN(fan);
+	
+	status = acpi_GetInteger(h, "_STA",  &state);
+	if(ACPI_FAILURE(status)) {
+		ACPI_VPRINT(dev, acpi_device_get_parent_softc(dev), 
+		"Getting power status: failed --%s\n", AcpiFormatException(status));
+		state = 2;
+	}
+	
+//	ACPI_SERIAL_END(fan);
+	
+	return state;
+}
+
+
 /* This function turns the fan on and off. */
 static void
-acpi_fan_set_on(device_t dev, int new_state) {
+acpi_fan_set_power(device_t dev, int new_state) {
 
-/*
-	struct acpi_fan_softc *sc;
-    ACPI_HANDLE h;
+	ACPI_HANDLE h;
 	ACPI_STATUS status;
 
-    h = acpi_get_handle(dev);		
-    sc = device_get_softc(dev);
+	h = acpi_get_handle(dev);
 
-
-
-		if(new_state) {
+		if(new_state == 1) {
 			// set fan to  D3 (On)
 			//XXX: which one?
-			status = acpi_set_powerstate(dev, ACPI_STATE_D3); 
-			status = acpi_pwr_switch_consumer(h, ACPI_STATE_D3);
-			status = acpi_evaluate_object(h, "_PS3", NULL, NULL);
+			//status = acpi_set_powerstate(dev, ACPI_STATE_D3); 
+			//	status = acpi_pwr_switch_consumer(acpi_get_handle(dev), ACPI_STATE_D3);
+			//status = AcpiEvaluateObject(h, "_PS3", NULL, NULL);
+			status = AcpiEvaluateObject(h, "_ON", NULL, NULL);
 			
-			
-			
-			status = AcpiEvaluateObject(h, "_PS3", NULL, NULL);
+						
+			//status = AcpiEvaluateObject(h, "_PS3", NULL, NULL);
 			if(ACPI_FAILURE(status)) 
-			{
--				ACPI_VPRINT(dev, acpi_device_get_parent_softc(dev), 
-				"turning fan on: failed --%s\n", AcpiFormatException(statuts));
-				return;
-			}
-			
-			sc->fan_is_running = 1;
-
+				ACPI_VPRINT(dev, acpi_device_get_parent_softc(dev), 
+				"turning fan on: failed --%s\n", AcpiFormatException(status));
 		}
 	
-		else {
+		else if (new_state == 0) {
 		//set fan to  D0 (Off)
-			status = AcpiEvaluateObject(h, "_PS0", NULL, NULL);
+			status = AcpiEvaluateObject(h, "_OFF", NULL, NULL);
 			
-			
--			if(ACPI_FAILURE(status)) {
--				ACPI_VPRINT(dev, acpi_device_get_parent_softc(dev),
-				"turning fan off: failed --%s\n", AcpiFormatException(statuts));
-				return;
-			}
-			
-			sc->fan_is_running = 0;
+			if(ACPI_FAILURE(status))
+				ACPI_VPRINT(dev, acpi_device_get_parent_softc(dev),
+				"turning fan off: failed --%s\n", AcpiFormatException(status));
 		}
-		*/
+		return;
 }
 
 static int acpi_fan_get_fif(device_t dev) {
